@@ -1,0 +1,25 @@
+From 8aa76701465e78ade60d6f0b77ebefb12845ee84 Mon Sep 17 00:00:00 2001
+From: Yasha Cherikovsky <yasha.che3@gmail.com>
+Date: Sat, 29 Sep 2018 19:27:56 +0300
+Subject: [PATCH 2/2] MIPS: Add __mips_has_load_store_lr builtin
+
+---
+ gcc/config/mips/mips.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/gcc/config/mips/mips.h b/gcc/config/mips/mips.h
+index b73dd80bbb8..0878e6c15a4 100644
+--- a/gcc/config/mips/mips.h
++++ b/gcc/config/mips/mips.h
+@@ -656,6 +656,8 @@ struct mips_cpu_info {
+ 	builtin_define ("__mips_no_lxc1_sxc1");				\
+       if (!ISA_HAS_UNFUSED_MADD4 && !ISA_HAS_FUSED_MADD4)		\
+ 	builtin_define ("__mips_no_madd4");				\
++      if (ISA_HAS_LWL_LWR)		\
++	builtin_define ("__mips_has_load_store_lr");				\
+     }									\
+   while (0)
+ 
+-- 
+2.23.0
+
