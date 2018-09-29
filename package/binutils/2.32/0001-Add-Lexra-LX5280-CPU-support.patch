@@ -1,0 +1,327 @@
+From f3a4f8f2f0f9e6464321f04e63e5731565623bd5 Mon Sep 17 00:00:00 2001
+From: Yasha Cherikovsky <yasha.che3@gmail.com>
+Date: Thu, 27 Sep 2018 13:11:41 +0300
+Subject: [PATCH] Add Lexra LX5280 CPU support
+
+---
+ bfd/archures.c        |  1 +
+ bfd/bfd-in2.h         |  1 +
+ bfd/cpu-mips.c        |  2 ++
+ bfd/elfxx-mips.c      | 13 +++++++++++++
+ binutils/readelf.c    |  4 ++++
+ gas/config/tc-mips.c  |  1 +
+ include/elf/mips.h    |  2 ++
+ include/opcode/mips.h |  8 +++++++-
+ opcodes/mips-dis.c    | 15 +++++++++++++++
+ opcodes/mips-opc.c    | 32 +++++++++++++++++++-------------
+ 10 files changed, 65 insertions(+), 14 deletions(-)
+
+diff --git a/bfd/archures.c b/bfd/archures.c
+index 647cf0d8d4..694a49d213 100644
+--- a/bfd/archures.c
++++ b/bfd/archures.c
+@@ -185,6 +185,7 @@ DESCRIPTION
+ .#define bfd_mach_mips_octeon3		6503
+ .#define bfd_mach_mips_xlr		887682	 {* decimal 'XLR'.  *}
+ .#define bfd_mach_mips_interaptiv_mr2	736550	 {* decimal 'IA2'.  *}
++.#define bfd_mach_mips_lx5280 105280
+ .#define bfd_mach_mipsisa32		32
+ .#define bfd_mach_mipsisa32r2		33
+ .#define bfd_mach_mipsisa32r3		34
+diff --git a/bfd/bfd-in2.h b/bfd/bfd-in2.h
+index e25da50aaf..7dcf4b9ec8 100644
+--- a/bfd/bfd-in2.h
++++ b/bfd/bfd-in2.h
+@@ -2084,6 +2084,7 @@ enum bfd_architecture
+ #define bfd_mach_mips_octeon3          6503
+ #define bfd_mach_mips_xlr              887682   /* decimal 'XLR'.  */
+ #define bfd_mach_mips_interaptiv_mr2   736550   /* decimal 'IA2'.  */
++#define bfd_mach_mips_lx5280           105280
+ #define bfd_mach_mipsisa32             32
+ #define bfd_mach_mipsisa32r2           33
+ #define bfd_mach_mipsisa32r3           34
+diff --git a/bfd/cpu-mips.c b/bfd/cpu-mips.c
+index b359491305..5b9881122f 100644
+--- a/bfd/cpu-mips.c
++++ b/bfd/cpu-mips.c
+@@ -107,6 +107,7 @@ enum
+   I_mipsocteon3,
+   I_xlr,
+   I_interaptiv_mr2,
++  I_lx5280,
+   I_micromips
+ };
+ 
+@@ -162,6 +163,7 @@ static const bfd_arch_info_type arch_info_struct[] =
+   N (64, 64, bfd_mach_mips_xlr, "mips:xlr",	  FALSE, NN(I_xlr)),
+   N (32, 32, bfd_mach_mips_interaptiv_mr2, "mips:interaptiv-mr2", FALSE,
+      NN(I_interaptiv_mr2)),
++  N (32, 32, bfd_mach_mips_lx5280, "mips:lx5280", FALSE, NN(I_lx5280)),
+   N (64, 64, bfd_mach_mips_micromips,"mips:micromips",FALSE,0)
+ };
+ 
+diff --git a/bfd/elfxx-mips.c b/bfd/elfxx-mips.c
+index 5998bc43a8..130a39df8f 100644
+--- a/bfd/elfxx-mips.c
++++ b/bfd/elfxx-mips.c
+@@ -6919,6 +6919,9 @@ _bfd_elf_mips_mach (flagword flags)
+     case E_MIPS_MACH_IAMR2:
+       return bfd_mach_mips_interaptiv_mr2;
+ 
++    case E_MIPS_MACH_LX5280:
++      return bfd_mach_mips_lx5280;
++
+     default:
+       switch (flags & EF_MIPS_ARCH)
+ 	{
+@@ -12230,6 +12233,10 @@ mips_set_isa_flags (bfd *abfd)
+     case bfd_mach_mipsisa64r6:
+       val = E_MIPS_ARCH_64R6;
+       break;
++
++    case bfd_mach_mips_lx5280:
++      val = E_MIPS_ARCH_1 | E_MIPS_MACH_LX5280;
++      break;
+     }
+   elf_elfheader (abfd)->e_flags &= ~(EF_MIPS_ARCH | EF_MIPS_MACH);
+   elf_elfheader (abfd)->e_flags |= val;
+@@ -14273,6 +14280,7 @@ static const struct mips_mach_extension mips_mach_extensions[] =
+   { bfd_mach_mips4010, bfd_mach_mips6000 },
+ 
+   /* MIPS I extensions.  */
++  { bfd_mach_mips_lx5280, bfd_mach_mips3000 },
+   { bfd_mach_mips6000, bfd_mach_mips3000 },
+   { bfd_mach_mips3900, bfd_mach_mips3000 }
+ };
+@@ -14330,6 +14338,7 @@ bfd_mips_isa_ext_mach (unsigned int isa_ext)
+     case AFL_EXT_OCTEONP:     return bfd_mach_mips_octeonp;
+     case AFL_EXT_OCTEON2:     return bfd_mach_mips_octeon2;
+     case AFL_EXT_XLR:	      return bfd_mach_mips_xlr;
++    case AFL_EXT_LX5280:      return bfd_mach_mips_lx5280;
+     default:		      return bfd_mach_mips3000;
+     }
+ }
+@@ -14361,6 +14370,7 @@ bfd_mips_isa_ext (bfd *abfd)
+     case bfd_mach_mips_xlr:	    return AFL_EXT_XLR;
+     case bfd_mach_mips_interaptiv_mr2:
+       return AFL_EXT_INTERAPTIV_MR2;
++    case bfd_mach_mips_lx5280:	    return AFL_EXT_LX5280;
+     default:			    return 0;
+     }
+ }
+@@ -15972,6 +15982,9 @@ print_mips_isa_ext (FILE *file, unsigned int isa_ext)
+     case AFL_EXT_INTERAPTIV_MR2:
+       fputs ("Imagination interAptiv MR2", file);
+       break;
++    case AFL_EXT_LX5280:
++      fputs ("Lexra LX5280", file);
++      break;
+     default:
+       fprintf (file, "%s (%d)", _("Unknown"), isa_ext);
+       break;
+diff --git a/binutils/readelf.c b/binutils/readelf.c
+index b13eb6a43b..910fbc33d9 100644
+--- a/binutils/readelf.c
++++ b/binutils/readelf.c
+@@ -3412,6 +3412,7 @@ get_machine_flags (Filedata * filedata, unsigned e_flags, unsigned e_machine)
+ 	    case E_MIPS_MACH_OCTEON3: strcat (buf, ", octeon3"); break;
+ 	    case E_MIPS_MACH_XLR:  strcat (buf, ", xlr"); break;
+ 	    case E_MIPS_MACH_IAMR2:  strcat (buf, ", interaptiv-mr2"); break;
++	    case E_MIPS_MACH_LX5280:  strcat (buf, ", lx5280"); break;
+ 	    case 0:
+ 	    /* We simply ignore the field in this case to avoid confusion:
+ 	       MIPS ELF does not specify EF_MIPS_MACH, it is a GNU
+@@ -15840,6 +15841,9 @@ print_mips_isa_ext (unsigned int isa_ext)
+     case AFL_EXT_INTERAPTIV_MR2:
+       fputs ("Imagination interAptiv MR2", stdout);
+       break;
++    case AFL_EXT_LX5280:
++      fputs ("Lexra LX5280", stdout);
++      break;
+     default:
+       fprintf (stdout, "%s (%d)", _("Unknown"), isa_ext);
+     }
+diff --git a/gas/config/tc-mips.c b/gas/config/tc-mips.c
+index ae55904229..07d44666bf 100644
+--- a/gas/config/tc-mips.c
++++ b/gas/config/tc-mips.c
+@@ -19724,6 +19724,7 @@ static const struct mips_cpu_info mips_cpu_info_table[] =
+   { "r3000",          0, 0,			ISA_MIPS1,    CPU_R3000 },
+   { "r2000",          0, 0,			ISA_MIPS1,    CPU_R3000 },
+   { "r3900",          0, 0,			ISA_MIPS1,    CPU_R3900 },
++  { "lx5280",         0, 0,			ISA_MIPS1,    CPU_LX5280 },
+ 
+   /* MIPS II */
+   { "r6000",          0, 0,			ISA_MIPS2,    CPU_R6000 },
+diff --git a/include/elf/mips.h b/include/elf/mips.h
+index b76d450ae2..5d0f66f12f 100644
+--- a/include/elf/mips.h
++++ b/include/elf/mips.h
+@@ -302,6 +302,7 @@ END_RELOC_NUMBERS (R_MIPS_maxext)
+ #define E_MIPS_MACH_GS464       0x00A20000
+ #define E_MIPS_MACH_GS464E	0x00A30000
+ #define E_MIPS_MACH_GS264E	0x00A40000
++#define E_MIPS_MACH_LX5280  0x00A50000
+ 
+ /* Processor specific section indices.  These sections do not actually
+    exist.  Symbols with a st_shndx field corresponding to one of these
+@@ -1267,6 +1268,7 @@ extern void bfd_mips_elf_swap_abiflags_v0_out
+ #define AFL_EXT_LOONGSON_2F  18  /* ST Microelectronics Loongson 2F.  */
+ #define AFL_EXT_OCTEON3      19  /* Cavium Networks Octeon3.  */
+ #define AFL_EXT_INTERAPTIV_MR2 20  /* Imagination interAptiv MR2.  */
++#define AFL_EXT_LX5280       21  /* Lexra LX5280.  */
+ 
+ /* Masks for the flags1 word of an ABI flags structure.  */
+ #define AFL_FLAGS1_ODDSPREG   1	 /* Uses odd single-precision registers.  */
+diff --git a/include/opcode/mips.h b/include/opcode/mips.h
+index abd52c8980..a43c72fbd2 100644
+--- a/include/opcode/mips.h
++++ b/include/opcode/mips.h
+@@ -1220,7 +1220,7 @@ static const unsigned int mips_isa_table[] = {
+ #undef ISAF
+ 
+ /* Masks used for Chip specific instructions.  */
+-#define INSN_CHIP_MASK		  0xc7ff4f60
++#define INSN_CHIP_MASK		  0xcfff4f60
+ 
+ /* Cavium Networks Octeon instructions.  */
+ #define INSN_OCTEON		  0x00000800
+@@ -1260,6 +1260,8 @@ static const unsigned int mips_isa_table[] = {
+ #define INSN_XLR                 0x00000020
+ /* Imagination interAptiv MR2.  */
+ #define INSN_INTERAPTIV_MR2	  0x04000000
++/* Lexra LX5280.  */
++#define INSN_LX5280               0x08000000
+ 
+ /* DSP ASE */
+ #define ASE_DSP			0x00000001
+@@ -1381,6 +1383,7 @@ static const unsigned int mips_isa_table[] = {
+ #define CPU_OCTEON3	6503
+ #define CPU_XLR     	887682   	/* decimal 'XLR'   */
+ #define CPU_INTERAPTIV_MR2 736550	/* decimal 'IA2'  */
++#define CPU_LX5280  105280
+ 
+ /* Return true if the given CPU is included in INSN_* mask MASK.  */
+ 
+@@ -1451,6 +1454,9 @@ cpu_is_member (int cpu, unsigned int mask)
+     case CPU_INTERAPTIV_MR2:
+       return (mask & INSN_INTERAPTIV_MR2) != 0;
+ 
++    case CPU_LX5280:
++      return (mask & INSN_LX5280) != 0;
++
+     case CPU_MIPS32R6:
+       return (mask & INSN_ISA_MASK) == INSN_ISA32R6;
+ 
+diff --git a/opcodes/mips-dis.c b/opcodes/mips-dis.c
+index 0dc437ede4..a27ada6a84 100644
+--- a/opcodes/mips-dis.c
++++ b/opcodes/mips-dis.c
+@@ -133,6 +133,18 @@ static const char * const mips_cp0_names_r3000[32] =
+   "$28",          "$29",          "$30",          "$31",
+ };
+ 
++static const char * const mips_cp0_names_lx5280[32] =
++{
++  "c0_index",     "c0_random",    "c0_entrylo",   "$3",
++  "c0_context",   "$5",           "$6",           "$7",
++  "c0_badvaddr",  "$9",           "c0_entryhi",   "$11",
++  "c0_sr",        "c0_cause",     "c0_epc",       "c0_prid",
++  "$16",          "$17",          "$18",          "$19",
++  "c0_cctl",      "$21",          "$22",          "$23",
++  "$24",          "$25",          "$26",          "$27",
++  "$28",          "$29",          "$30",          "$31",
++};
++
+ static const char * const mips_cp0_names_r4000[32] =
+ {
+   "c0_index",     "c0_random",    "c0_entrylo0",  "c0_entrylo1",
+@@ -458,6 +470,9 @@ const struct mips_arch_choice mips_arch_choices[] =
+   { "r3900",	1, bfd_mach_mips3900, CPU_R3900, ISA_MIPS1, 0,
+     mips_cp0_names_numeric, NULL, 0, mips_cp1_names_numeric,
+     mips_hwr_names_numeric },
++  { "lx5280",	1, bfd_mach_mips_lx5280, CPU_LX5280, ISA_MIPS1, 0,
++    mips_cp0_names_lx5280, NULL, 0, mips_cp1_names_numeric,
++    mips_hwr_names_numeric },
+   { "r4000",	1, bfd_mach_mips4000, CPU_R4000, ISA_MIPS3, 0,
+     mips_cp0_names_r4000, NULL, 0, mips_cp1_names_numeric,
+     mips_hwr_names_numeric },
+diff --git a/opcodes/mips-opc.c b/opcodes/mips-opc.c
+index 837da6bd99..535042b58e 100644
+--- a/opcodes/mips-opc.c
++++ b/opcodes/mips-opc.c
+@@ -328,6 +328,7 @@ decode_mips_operand (const char *p)
+ #define IOCT3	INSN_OCTEON3
+ #define XLR     INSN_XLR
+ #define IAMR2	INSN_INTERAPTIV_MR2
++#define LX5280 INSN_LX5280
+ #define IVIRT	ASE_VIRT
+ #define IVIRT64	ASE_VIRT64
+ 
+@@ -1323,12 +1324,12 @@ const struct mips_opcode mips_builtin_opcodes[] =
+ {"lwc2",		"E,A(b)",	0,    (int) M_LWC2_AB,	INSN_MACRO,		0,		I1,		0,	IOCT|IOCTP|IOCT2|EE },
+ {"lwc3",		"E,o(b)",	0xcc000000, 0xfc000000,	RD_3|WR_CC|CLD,		0,		I1,		0,	IOCT|IOCTP|IOCT2|EE|I37 },
+ {"lwc3",		"E,A(b)",	0,    (int) M_LWC3_AB,	INSN_MACRO,		0,		I1,		0,	IOCT|IOCTP|IOCT2|EE|I37 },
+-{"lwl",			"t,o(b)",	0x88000000, 0xfc000000,	WR_1|RD_3|LM,		0,		I1,		0,	I37 },
+-{"lwl",			"t,A(b)",	0,    (int) M_LWL_AB,	INSN_MACRO,		0,		I1,		0,	I37 },
++{"lwl",			"t,o(b)",	0x88000000, 0xfc000000,	WR_1|RD_3|LM,		0,		I1,		0,	I37|LX5280 },
++{"lwl",			"t,A(b)",	0,    (int) M_LWL_AB,	INSN_MACRO,		0,		I1,		0,	I37|LX5280 },
+ {"lcache",		"t,o(b)",	0x88000000, 0xfc000000,	WR_1|RD_3|LM,		0,		I2,		0,	I37 }, /* same */
+ {"lcache",		"t,A(b)",	0,    (int) M_LWL_AB,	INSN_MACRO,		0,		I2,		0,	I37 }, /* as lwl */
+-{"lwr",			"t,o(b)",	0x98000000, 0xfc000000,	WR_1|RD_3|LM,		0,		I1,		0,	I37 },
+-{"lwr",			"t,A(b)",	0,    (int) M_LWR_AB,	INSN_MACRO,		0,		I1,		0,	I37 },
++{"lwr",			"t,o(b)",	0x98000000, 0xfc000000,	WR_1|RD_3|LM,		0,		I1,		0,	I37|LX5280 },
++{"lwr",			"t,A(b)",	0,    (int) M_LWR_AB,	INSN_MACRO,		0,		I1,		0,	I37|LX5280 },
+ {"flush",		"t,o(b)",	0x98000000, 0xfc000000,	WR_1|RD_3|LM,		0,		I2,		0,	I37 }, /* same */
+ {"flush",		"t,A(b)",	0,    (int) M_LWR_AB,	INSN_MACRO,		0,		I2,		0,	I37 }, /* as lwr */
+ {"fork",		"d,s,t",	0x7c000008, 0xfc0007ff, WR_1|RD_2|RD_3|TRAP,	0,		0,		MT32,	0 },
+@@ -1984,12 +1985,12 @@ const struct mips_opcode mips_builtin_opcodes[] =
+ {"swc2",		"E,A(b)",	0,    (int) M_SWC2_AB,	INSN_MACRO,		0,		I1,		0,	IOCT|IOCTP|IOCT2|EE },
+ {"swc3",		"E,o(b)",	0xec000000, 0xfc000000,	RD_3|RD_C3|SM,		0,		I1,		0,	IOCT|IOCTP|IOCT2|EE|I37 },
+ {"swc3",		"E,A(b)",	0,    (int) M_SWC3_AB,	INSN_MACRO,		0,		I1,		0,	IOCT|IOCTP|IOCT2|EE|I37 },
+-{"swl",			"t,o(b)",	0xa8000000, 0xfc000000,	RD_1|RD_3|SM,		0,		I1,		0,	I37 },
+-{"swl",			"t,A(b)",	0,    (int) M_SWL_AB,	INSN_MACRO,		0,		I1,		0,	I37 },
++{"swl",			"t,o(b)",	0xa8000000, 0xfc000000,	RD_1|RD_3|SM,		0,		I1,		0,	I37|LX5280 },
++{"swl",			"t,A(b)",	0,    (int) M_SWL_AB,	INSN_MACRO,		0,		I1,		0,	I37|LX5280 },
+ {"scache",		"t,o(b)",	0xa8000000, 0xfc000000,	RD_1|RD_3,		0,		I2,		0,	I37 }, /* same */
+ {"scache",		"t,A(b)",	0,    (int) M_SWL_AB,	INSN_MACRO,		0,		I2,		0,	I37 }, /* as swl */
+-{"swr",			"t,o(b)",	0xb8000000, 0xfc000000,	RD_1|RD_3|SM,		0,		I1,		0,	I37 },
+-{"swr",			"t,A(b)",	0,    (int) M_SWR_AB,	INSN_MACRO,		0,		I1,		0,	I37 },
++{"swr",			"t,o(b)",	0xb8000000, 0xfc000000,	RD_1|RD_3|SM,		0,		I1,		0,	I37|LX5280 },
++{"swr",			"t,A(b)",	0,    (int) M_SWR_AB,	INSN_MACRO,		0,		I1,		0,	I37|LX5280 },
+ {"invalidate",		"t,o(b)",	0xb8000000, 0xfc000000,	RD_1|RD_3,		0,		I2,		0,	I37 }, /* same */
+ {"invalidate",		"t,A(b)",	0,    (int) M_SWR_AB,	INSN_MACRO,		0,		I2,		0,	I37 }, /* as swr */
+ {"swxc1",		"S,t(b)",	0x4c000008, 0xfc0007ff, RD_1|RD_2|RD_3|SM|FP_S,	0,		I4_33,		0,	I37 },
+@@ -2061,12 +2062,12 @@ const struct mips_opcode mips_builtin_opcodes[] =
+ {"trunc.w.s",		"D,S,x",	0x4600000d, 0xffff003f,	WR_1|RD_2|FP_S,		0,		I2,		0,	EE },
+ {"trunc.w.s",		"D,S,t",	0,    (int) M_TRUNCWS,	INSN_MACRO,		INSN2_M_FP_S,	I1,		0,	EE },
+ {"uld",			"t,A(b)",	0,    (int) M_ULD_AB,	INSN_MACRO,		0,		I3,		0,	I69 },
+-{"ulh",			"t,A(b)",	0,    (int) M_ULH_AB,	INSN_MACRO,		0,		I1,		0,	I37 },
+-{"ulhu",		"t,A(b)",	0,    (int) M_ULHU_AB,	INSN_MACRO,		0,		I1,		0,	I37 },
+-{"ulw",			"t,A(b)",	0,    (int) M_ULW_AB,	INSN_MACRO,		0,		I1,		0,	I37 },
++{"ulh",			"t,A(b)",	0,    (int) M_ULH_AB,	INSN_MACRO,		0,		I1,		0,	I37|LX5280 },
++{"ulhu",		"t,A(b)",	0,    (int) M_ULHU_AB,	INSN_MACRO,		0,		I1,		0,	I37|LX5280 },
++{"ulw",			"t,A(b)",	0,    (int) M_ULW_AB,	INSN_MACRO,		0,		I1,		0,	I37|LX5280 },
+ {"usd",			"t,A(b)",	0,    (int) M_USD_AB,	INSN_MACRO,		0,		I3,		0,	I69 },
+-{"ush",			"t,A(b)",	0,    (int) M_USH_AB,	INSN_MACRO,		0,		I1,		0,	I37 },
+-{"usw",			"t,A(b)",	0,    (int) M_USW_AB,	INSN_MACRO,		0,		I1,		0,	I37 },
++{"ush",			"t,A(b)",	0,    (int) M_USH_AB,	INSN_MACRO,		0,		I1,		0,	I37|LX5280 },
++{"usw",			"t,A(b)",	0,    (int) M_USW_AB,	INSN_MACRO,		0,		I1,		0,	I37|LX5280 },
+ {"v3mulu",		"d,v,t",	0x70000011, 0xfc0007ff, WR_1|RD_2|RD_3,		0,		IOCT,		0,	0 },
+ {"vmm0",		"d,v,t",	0x70000010, 0xfc0007ff, WR_1|RD_2|RD_3,		0,		IOCT,		0,	0 },
+ {"vmulu",		"d,v,t",	0x7000000f, 0xfc0007ff, WR_1|RD_2|RD_3,		0,		IOCT,		0,	0 },
+@@ -3188,6 +3189,11 @@ const struct mips_opcode mips_builtin_opcodes[] =
+ {"restore",		"-m",		0x7000001f, 0xfc00603f, WR_31|NODS,		MOD_SP,		IAMR2,		0,	0 },
+ {"save",		"-m",		0x7000201f, 0xfc00603f, NODS,			RD_31|MOD_SP,	IAMR2,		0,	0 },
+ 
++/* Lexra LX5280 instruction extensions.  */
++// {"mflxc0",		"t,#d4",	0x40600000, 0xFFE007FF, WR_1|RD_C0|LC,		0,		LX5280,		0,	0 },
++// {"mtlxc0",		"t,#d4",	0x40E00000, 0xFFE007FF, RD_1|WR_C0|WR_CC|CM,	0,		LX5280,		0,	0 },
++{"sleep",		"",		0x42000038, 0xffffffff, 0,			0,		LX5280,		0,	0 },
++
+ /* User Defined Instruction.  */
+ {"udi0",		"s,t,d,+1",	0x70000010, 0xfc00003f,	UDI,			0,		I33,		0,	0 },
+ {"udi0",		"s,t,+2",	0x70000010, 0xfc00003f,	UDI,			0,		I33,		0,	0 },
+-- 
+2.23.0
+
